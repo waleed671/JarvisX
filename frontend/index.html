@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JarvisX</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f0ede8;
+      --panel: #ffffff;
+      --ink: #1d252c;
+      --muted: #66717c;
+      --line: #d8d3c8;
+      --accent: #0f766e;
+      --accent-dark: #0a5d57;
+      --agent-bg: #eef7f5;
+      --user-bg: #1d252c;
+      --red: #b42318;
+      --pulse: rgba(15, 118, 110, 0.3);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--ink);
+      min-height: 100dvh;
+    }
+
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100dvh;
+    }
+
+    /* ── header ── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.85);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+    }
+
+    .mark {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .lang-select {
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      font: inherit;
+      font-size: 13px;
+      color: var(--ink);
+      background: #fff;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .lang-select:focus { border-color: var(--accent); }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    .status-dot.thinking { animation: pulse 1s infinite; }
+    .status-dot.listening { background: var(--red); animation: pulse 0.6s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.4); opacity: 0.6; }
+    }
+
+    #status-text {
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    /* ── thread ── */
+    main {
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .thread {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .bubble {
+      position: relative;
+      max-width: min(700px, 88%);
+      padding: 11px 14px;
+      border-radius: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 15px;
+      border: 1px solid transparent;
+    }
+
+    .bubble.agent {
+      align-self: flex-start;
+      background: var(--agent-bg);
+      border-color: rgba(15,118,110,0.18);
+      border-bottom-left-radius: 4px;
+    }
+
+    .bubble.user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .bubble .sources {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(15,118,110,0.2);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .bubble .sources a {
+      color: var(--accent);
+      text-decoration: none;
+      display: block;
+    }
+
+    .bubble .sources a:hover { text-decoration: underline; }
+
+    /* ── composer ── */
+    .composer {
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,0.92);
+      backdrop-filter: blur(12px);
+      padding: 14px 20px 18px;
+    }
+
+    form {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 8px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    input {
+      min-width: 0;
+      height: 48px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font: inherit;
+      font-size: 15px;
+      color: var(--ink);
+      background: #fff;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(15,118,110,0.12);
+    }
+
+    button {
+      height: 48px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 10px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      white-space: nowrap;
+    }
+
+    button:active { transform: scale(0.97); }
+
+    .btn-send {
+      background: var(--accent);
+      color: #fff;
+      min-width: 80px;
+    }
+
+    .btn-send:hover:not(:disabled) { background: var(--accent-dark); }
+    .btn-send:disabled { opacity: 0.55; cursor: wait; }
+
+    .btn-voice {
+      background: #e6f2ef;
+      color: var(--accent);
+      border: 1px solid rgba(15,118,110,0.22);
+      min-width: 100px;
+    }
+
+    .btn-voice:hover:not(:disabled) {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    .btn-voice.listening {
+      background: var(--red);
+      color: #fff;
+      border-color: var(--red);
+      animation: pulse-border 1s infinite;
+    }
+
+    @keyframes pulse-border {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(180,35,24,0.4); }
+      50% { box-shadow: 0 0 0 6px rgba(180,35,24,0); }
+    }
+
+    .btn-voice:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* ── hint bar ── */
+    .hint {
+      max-width: 860px;
+      margin: 0 auto;
+      padding-top: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 600px) {
+      header, main, .composer { padding-left: 14px; padding-right: 14px; }
+      form { grid-template-columns: 1fr auto; }
+      .btn-voice { grid-column: 1/-1; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="mark">J</div>
+        JarvisX
+      </div>
+      <div class="header-right">
+        <select class="lang-select" id="lang-select" title="Voice language">
+          <option value="en-US">🇺🇸 English</option>
+          <option value="ur-PK">🇵🇰 Urdu</option>
+          <option value="hi-IN">🇮🇳 Hindi</option>
+          <option value="ar-SA">🇸🇦 Arabic</option>
+        </select>
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Ready</span>
+      </div>
+    </header>
+
+    <main>
+      <div class="thread" id="thread">
+        <div class="bubble agent">JarvisX ready. Boliye — main sun raha hoon. 🎧</div>
+      </div>
+    </main>
+
+    <div class="composer">
+      <form id="chat-form">
+        <input id="message" autocomplete="off" placeholder="Command ya sawaal likhein ya mic use karein…" autofocus>
+        <button class="btn-voice" id="voice-btn" type="button" title="Voice input">🎙 Voice</button>
+        <button class="btn-send" id="send-btn" type="submit">Send</button>
+      </form>
+      <div class="hint" id="hint">
+        Try: <em>open chrome</em> · <em>bitcoin rate</em> · <em>latest news</em> · <em>whatsapp 923001234567 message Salam</em>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL   = 'http://127.0.0.1:8000/chat';
+    const form      = document.getElementById('chat-form');
+    const input     = document.getElementById('message');
+    const sendBtn   = document.getElementById('send-btn');
+    const voiceBtn  = document.getElementById('voice-btn');
+    const statusDot = document.getElementById('status-dot');
+    const statusTxt = document.getElementById('status-text');
+    const langSel   = document.getElementById('lang-select');
+    const thread    = document.getElementById('thread');
+    const hint      = document.getElementById('hint');
+
+    // ── redirect from file:// ──────────────────────────────────────────────
+    if (window.location.protocol === 'file:') {
+      addBubble('Opening JarvisX at http://127.0.0.1:8000/ui …', 'agent');
+      setTimeout(() => { window.location.href = 'http://127.0.0.1:8000/ui'; }, 600);
+    }
+
+    // ── speech recognition setup ──────────────────────────────────────────
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognition = null;
+    let listening   = false;
+
+    if (SR) {
+      recognition = new SR();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        listening = true;
+        setStatus('listening', '🎙 Listening…');
+        voiceBtn.classList.add('listening');
+        voiceBtn.textContent = '⏹ Stop';
+        hint.textContent = 'Bol dein — main sun raha hoon…';
+      };
+
+      recognition.onend = () => {
+        listening = false;
+        voiceBtn.classList.remove('listening');
+        voiceBtn.textContent = '🎙 Voice';
+        if (statusTxt.textContent.includes('Listening')) setStatus('', 'Ready');
+      };
+
+      recognition.onresult = (e) => {
+        const parts = Array.from(e.results);
+        const transcript = parts.map(r => r[0].transcript).join(' ').trim();
+
+        // Show interim in input
+        input.value = transcript;
+
+        // Only submit when final
+        if (parts[parts.length - 1].isFinal && transcript) {
+          sendMessage(transcript);
+          input.value = '';
+        }
+      };
+
+      recognition.onerror = (e) => {
+        const msg = voiceErrorText(e.error);
+        addBubble(msg, 'agent');
+        speak(msg);
+      };
+
+      voiceBtn.addEventListener('click', () => {
+        if (listening) {
+          recognition.stop();
+          return;
+        }
+        recognition.lang = langSel.value;
+        window.speechSynthesis.cancel();
+        try {
+          recognition.start();
+        } catch (_) {
+          recognition.stop();
+          setTimeout(() => recognition.start(), 200);
+        }
+      });
+    } else {
+      voiceBtn.disabled = true;
+      voiceBtn.title = 'Your browser does not support voice input';
+      voiceBtn.textContent = 'No Voice';
+    }
+
+    // ── send flow ─────────────────────────────────────────────────────────
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = input.value.trim();
+      if (!msg) return;
+      input.value = '';
+      await sendMessage(msg);
+    });
+
+    async function sendMessage(message) {
+      addBubble(message, 'user');
+      sendBtn.disabled = true;
+      setStatus('thinking', 'Thinking…');
+      hint.textContent = '';
+
+      try {
+        const res  = await fetch(API_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+        });
+        const data = await res.json();
+        const reply = buildReply(data);
+        addBubble(reply.text, 'agent', reply.sources);
+        speak(data.speak || data.answer || reply.text);
+      } catch (err) {
+        const errMsg = `JarvisX se connection nahi mila: ${err.message}`;
+        addBubble(errMsg, 'agent');
+        speak(errMsg);
+      } finally {
+        sendBtn.disabled = false;
+        setStatus('', 'Ready');
+        hint.textContent = 'Try: open chrome · bitcoin rate · latest news · whatsapp 923001234567 message Salam';
+        input.focus();
+      }
+    }
+
+    // ── reply helpers ─────────────────────────────────────────────────────
+    function buildReply(data) {
+      let text = '';
+      const sources = Array.isArray(data.sources) ? data.sources : [];
+
+      if (data.answer && data.answer.trim()) {
+        text = data.answer.trim();
+      } else if (data.results?.length) {
+        text = data.results.map(r => r.message).filter(Boolean).join('\n');
+      } else {
+        text = 'Done.';
+      }
+
+      return { text, sources };
+    }
+
+    // ── DOM helpers ───────────────────────────────────────────────────────
+    function addBubble(text, role, sources = []) {
+      const div = document.createElement('div');
+      div.className = `bubble ${role}`;
+      div.textContent = text;
+
+      if (sources.length > 0) {
+        const srcDiv = document.createElement('div');
+        srcDiv.className = 'sources';
+        srcDiv.textContent = 'Sources:';
+        sources.slice(0, 5).forEach(s => {
+          const a = document.createElement('a');
+          a.href = s.url || '#';
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          a.textContent = s.title || s.url;
+          srcDiv.appendChild(a);
+        });
+        div.appendChild(srcDiv);
+      }
+
+      thread.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    }
+
+    function setStatus(state, text) {
+      statusDot.className = `status-dot ${state}`;
+      statusTxt.textContent = text;
+    }
+
+    // ── speech synthesis ──────────────────────────────────────────────────
+    function speak(text) {
+      if (!('speechSynthesis' in window) || !text) return;
+      window.speechSynthesis.cancel();
+
+      // Shorten very long responses for TTS
+      const MAX = 250;
+      const spoken = text.length > MAX ? text.slice(0, MAX) + '…' : text;
+
+      const utt = new SpeechSynthesisUtterance(spoken);
+      utt.lang = langSel.value;
+      utt.rate = 1.05;
+      utt.pitch = 1;
+
+      // Pick a matching voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const match = voices.find(v => v.lang.startsWith(langSel.value.split('-')[0]));
+      if (match) utt.voice = match;
+
+      window.speechSynthesis.speak(utt);
+    }
+
+    // Load voices async (some browsers require this)
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+
+    // ── voice error messages ──────────────────────────────────────────────
+    function voiceErrorText(error) {
+      const map = {
+        'not-allowed': 'Microphone permission blocked hai. Chrome mein address bar ke padlock icon se mic allow karo.',
+        'service-not-allowed': 'Voice service block hai. http://127.0.0.1:8000/ui open karo — file:// se voice nahi chalta.',
+        'no-speech': 'Awaaz detect nahi hui. Dobara voice dabao aur thoda clear bolo.',
+        'network': 'Network error: internet connection check karo.',
+        'aborted': 'Voice input cancel ho gayi.',
+      };
+      return map[error] || `Voice error: ${error}`;
+    }
+  </script>
+</body>
+</html>

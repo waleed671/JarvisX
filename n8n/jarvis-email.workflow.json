@@ -1,0 +1,79 @@
+{
+  "name": "JarvisX Email Send",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jarvis-email",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "email-webhook-001",
+      "name": "Email Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "webhookId": "jarvis-email"
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{ $env.GMAIL_FROM || '' }}",
+        "toEmail": "={{ $json.body.to || $json.to }}",
+        "subject": "={{ $json.body.subject || $json.subject || 'Message from JarvisX' }}",
+        "emailType": "text",
+        "message": "={{ $json.body.body || $json.body || '' }}",
+        "options": {}
+      },
+      "id": "email-send-001",
+      "name": "Send Email via Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [480, 300],
+      "credentials": {
+        "gmailOAuth2": {
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $input.first().json;\nreturn [{ json: {\n  success: true,\n  message: `Email sent to ${input.to || input.body?.to || 'recipient'}`,\n  threadId: input.threadId,\n  id: input.id,\n}}];"
+      },
+      "id": "email-result-001",
+      "name": "Format Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "email-respond-001",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [960, 300]
+    }
+  ],
+  "connections": {
+    "Email Webhook": {
+      "main": [[{"node": "Send Email via Gmail", "type": "main", "index": 0}]]
+    },
+    "Send Email via Gmail": {
+      "main": [[{"node": "Format Result", "type": "main", "index": 0}]]
+    },
+    "Format Result": {
+      "main": [[{"node": "Respond", "type": "main", "index": 0}]]
+    }
+  },
+  "pinData": {},
+  "settings": {"executionOrder": "v1"},
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-07-15T00:00:00.000Z",
+  "versionId": "email-workflow-v1"
+}

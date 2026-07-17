@@ -1,0 +1,250 @@
+{
+  "name": "JarvisX Router",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jarvis-router",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "d2a6b62f-9a0b-4f43-82b1-4b40fe67aeb1",
+      "name": "Jarvis Router Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        300
+      ],
+      "webhookId": "jarvis-router"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ─── helper utilities ────────────────────────────────────────────────────
+async function fetchJson(url) {
+  const r = await fetch(url, { headers: { accept: 'application/json' } });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${url}`);
+  return r.json();
+}
+async function fetchText(url) {
+  const r = await fetch(url, { headers: { accept: 'application/rss+xml,text/xml,text/plain' } });
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}: ${url}`);
+  return r.text();
+}
+function decodeText(v) {
+  return String(v||'')
+    .replace(/<!\\[CDATA\\[/g,'')
+    .replace(/\\]\\]>/g,'')
+    .replace(/&amp;/g,'&')
+    .replace(/&quot;/g,'"')
+    .replace(/&#39;/g,"'")
+    .replace(/&lt;/g,'<')
+    .replace(/&gt;/g,'>')
+    .replace(/<[^>]+>/g,'')
+    .trim();
+}
+function tagValue(block,tag){
+  const m=block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`,'i'));
+  return m?decodeText(m[1]):'';
+}
+function rssItems(xml,limit=6){
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0,limit).map(m=>{
+    const b=m[1];
+    return {title:tagValue(b,'title'),url:tagValue(b,'link'),date:tagValue(b,'pubDate')};
+  }).filter(i=>i.title);
+}
+function formatList(items){
+  return items.map((item,i)=>`${i+1}. ${item.title}`).join('\n');
+}
+
+// ─── intent detectors ────────────────────────────────────────────────────────
+function isCrypto(l){return /bitcoin|btc|ethereum|eth|crypto|cryptocurrency|altcoin/.test(l);}
+function isStock(l){return /\bstock\b|share price|nasdaq|nyse|tesla|apple stock|microsoft stock|nvidia|\bmeta\b|amazon stock|alphabet/.test(l);}
+function isMusic(l){return /(trending|viral|popular|top|latest).{0,30}(song|music|gaana|gana)|(song|music|gaana|gana).{0,30}(trending|viral|popular|top|latest)/.test(l);}
+function isNews(l){return /(latest|breaking|aaj.?ki?|today.?s?).{0,30}(news|khabar|khabrain|headlines)|\bnews\b/.test(l);}
+
+// ─── live answer functions ────────────────────────────────────────────────────
+function pickCryptoId(message){
+  const l=message.toLowerCase();
+  if(/ethereum|eth/.test(l)) return 'ethereum';
+  if(/binance|bnb/.test(l)) return 'binancecoin';
+  if(/dogecoin|doge/.test(l)) return 'dogecoin';
+  if(/solana|sol/.test(l)) return 'solana';
+  return 'bitcoin';
+}
+async function cryptoAnswer(message){
+  const id=pickCryptoId(message);
+  const data=await fetchJson(`https://api.coingecko.com/api/v3/simple/price?ids=${id}&vs_currencies=usd,pkr&include_24hr_change=true`);
+  const item=data[id];
+  if(!item) throw new Error('Coin data not available');
+  const name=id.charAt(0).toUpperCase()+id.slice(1);
+  const change=item.usd_24h_change==null?'':
+    `, 24h ${item.usd_24h_change>0?'+':''}${item.usd_24h_change.toFixed(2)}%`;
+  const answer=`${name}: $${item.usd.toLocaleString('en-US')} USD | PKR ${item.pkr.toLocaleString('en-US')}${change}`;
+  return {answer,sources:[{title:'CoinGecko',url:'https://www.coingecko.com/'}]};
+}
+
+function pickStockSymbol(message){
+  const u=message.toUpperCase();
+  const known={TESLA:'TSLA',APPLE:'AAPL',MICROSOFT:'MSFT',GOOGLE:'GOOGL',
+    ALPHABET:'GOOGL',AMAZON:'AMZN',NVIDIA:'NVDA',META:'META',NETFLIX:'NFLX',
+    SAMSUNG:'005930.KS',SONY:'SONY'};
+  for(const [n,s] of Object.entries(known)){
+    if(u.includes(n)) return s;
+  }
+  const m=u.match(/\b[A-Z]{1,5}\b/);
+  if(m && !['WHAT','TELL','RATE','PRICE','STOCK','SHARE','LATEST'].includes(m[0])) return m[0];
+  return 'AAPL';
+}
+async function stockAnswer(message){
+  const symbol=pickStockSymbol(message);
+  const data=await fetchJson(`https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=1d&interval=1m`);
+  const meta=data.chart.result[0].meta;
+  const price=meta.regularMarketPrice??meta.previousClose;
+  const currency=meta.currency||'USD';
+  const prev=meta.previousClose;
+  const change=price&&prev?
+    `, change ${(price-prev>0?'+':'')+(price-prev).toFixed(2)} ${currency}`:'';
+  return {
+    answer:`${symbol}: ${price} ${currency}${change}. Market: ${meta.marketState||'unknown'}.`,
+    sources:[{title:`Yahoo Finance ${symbol}`,url:`https://finance.yahoo.com/quote/${symbol}`}],
+  };
+}
+
+async function musicAnswer(){
+  const data=await fetchJson('https://rss.applemarketingtools.com/api/v2/us/music/most-played/10/songs.json');
+  const songs=data.feed.results.slice(0,6).map(s=>({title:`${s.name} — ${s.artistName}`,url:s.url}));
+  return {
+    answer:`Trending songs right now:\n${formatList(songs)}`,
+    sources:songs,
+  };
+}
+
+async function newsAnswer(message){
+  const q=encodeURIComponent(
+    message.replace(/latest|news|today|aaj|headlines|khabrain|khabar|breaking/gi,'').trim()||'top headlines'
+  );
+  const xml=await fetchText(`https://news.google.com/rss/search?q=${q}&hl=en-US&gl=US&ceid=US:en`);
+  const items=rssItems(xml,6);
+  return {
+    answer:`Latest news:\n${formatList(items)}`,
+    sources:items,
+  };
+}
+
+async function wikiAnswer(message){
+  const q=message.replace(/information|info|tell me about|about|mujhe|batao|what is|who is/gi,'').trim()||message;
+  const search=await fetchJson(`https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&format=json&origin=*`);
+  const title=search.query.search[0]?.title;
+  if(!title) throw new Error('No Wikipedia result found');
+  const summary=await fetchJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+  const extract=summary.extract?.split('. ').slice(0,3).join('. ')+'.';
+  return {
+    answer:`${summary.title}: ${extract}`,
+    sources:[{title:summary.title,url:summary.content_urls?.desktop?.page||`https://en.wikipedia.org/wiki/${encodeURIComponent(title)}`}],
+  };
+}
+
+// ─── router ──────────────────────────────────────────────────────────────────
+async function route(){
+  const incoming=$input.first().json;
+  const body=incoming.body||incoming;
+  const message=String(body.message||'').trim();
+  const lower=message.toLowerCase();
+
+  try{
+    let result;
+    if(isCrypto(lower)){
+      result=await cryptoAnswer(message);
+    } else if(isStock(lower)){
+      result=await stockAnswer(message);
+    } else if(isMusic(lower)){
+      result=await musicAnswer();
+    } else if(isNews(lower)){
+      result=await newsAnswer(message);
+    } else if(/information|info|tell me about|who is|what is|wikipedia/.test(lower)){
+      result=await wikiAnswer(message);
+    } else {
+      result=await newsAnswer(message);
+    }
+
+    return {
+      answer:result.answer,
+      speak:result.answer,
+      sources:result.sources||[],
+      actions:[],
+      handled_by:'n8n-jarvis-router',
+    };
+  } catch(error){
+    return {
+      answer:`I could not fetch live data: ${error.message}`,
+      speak:`I could not fetch live data: ${error.message}`,
+      sources:[],
+      actions:[],
+      handled_by:'n8n-jarvis-router',
+      error:error.message,
+    };
+  }
+}
+
+return [{json: await route()}];"
+      },
+      "id": "1596aefb-6e5e-428d-90e3-9fb7bb36808e",
+      "name": "Route Live Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "88d65dcb-b791-41cb-b409-243eb0e2f8ea",
+      "name": "Respond to JarvisX",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        780,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Jarvis Router Webhook": {
+      "main": [
+        [
+          {
+            "node": "Route Live Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Live Request": {
+      "main": [
+        [
+          {
+            "node": "Respond to JarvisX",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-07-15T00:00:00.000Z",
+  "versionId": "55b313cc-d49d-4f38-8e30-dcb49f6c11ad"
+}
